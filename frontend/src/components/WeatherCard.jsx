@@ -1,46 +1,65 @@
 import { useEffect, useState } from "react";
+import config from '../config';
 
 function WeatherCard() {
   const [weather, setWeather] = useState(null);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const API_KEY = "0a997e669ba3d30877905e67d1feac86"; // 🔑 Replace with your OpenWeather key
+    const fetchWeather = async () => {
+      if (!config.OPENWEATHER_API_KEY) {
+        setError("OpenWeather API key not configured");
+        setLoading(false);
+        return;
+      }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          console.log("📍 User Location:", latitude, longitude);
+      if (!navigator.geolocation) {
+        setError("Geolocation not supported in this browser.");
+        setLoading(false);
+        return;
+      }
 
-          fetch(
-            `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${API_KEY}`
-          )
-            .then((res) => res.json())
-            .then((data) => {
-              console.log("Weather API:", data);
-              setWeather({
-                city: data.name,
-                temp: data.main.temp,
-                wind: data.wind.speed,
-                pressure: data.main.pressure,
-                desc: data.weather[0].description,
-              });
-            })
-            .catch((err) => setError("Error fetching weather: " + err));
-        },
-        (err) => {
-          console.error("Geolocation error:", err);
-          setError("Location access denied. Please allow location access.");
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject);
+        });
+        
+        const { latitude, longitude } = position.coords;
+        console.log("📍 User Location:", latitude, longitude);
+
+        const response = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&units=metric&appid=${config.OPENWEATHER_API_KEY}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`Weather API error: ${response.status}`);
         }
-      );
-    } else {
-      setError("Geolocation not supported in this browser.");
-    }
+        
+        const data = await response.json();
+        console.log("Weather API:", data);
+        
+        setWeather({
+          city: data.name,
+          temp: data.main.temp,
+          wind: data.wind.speed,
+          pressure: data.main.pressure,
+          desc: data.weather[0].description,
+        });
+      } catch (err) {
+        console.error("Weather fetch error:", err);
+        setError(err.message || "Error fetching weather data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWeather();
   }, []);
 
+  if (loading) return <p className="text-blue-500">Loading weather...</p>;
   if (error) return <p className="text-red-500">{error}</p>;
-  if (!weather) return <p>Loading weather...</p>;
+  if (!weather) return <p className="text-gray-500">No weather data available</p>;
 
   return (
     <div className="p-4 bg-blue-100 dark:bg-blue-800 rounded-lg shadow text-center">

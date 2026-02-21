@@ -1,4 +1,5 @@
 import { useState } from "react";
+import config from '../config';
 
 function ChatbotFab() {
   const [open, setOpen] = useState(false);
@@ -6,28 +7,39 @@ function ChatbotFab() {
     { from: "bot", text: "Hi 👋 I'm your Cyclone Assistant. How can I help you?" }
   ]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
 
     // user message
     const userMsg = { from: "user", text: input };
-    setMessages([...messages, userMsg]);
+    setMessages(prev => [...prev, userMsg]);
+    setInput("");
+    setIsLoading(true);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/chat", {
+      const res = await fetch(`${config.API_BASE_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: input }),
       });
+      
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status}`);
+      }
+      
       const data = await res.json();
-
-      setMessages((prev) => [...prev, { from: "bot", text: data.reply }]);
+      setMessages(prev => [...prev, { from: "bot", text: data.reply }]);
     } catch (err) {
-      setMessages((prev) => [...prev, { from: "bot", text: "⚠️ Error connecting to server" }]);
+      console.error("Chatbot error:", err);
+      setMessages(prev => [...prev, { 
+        from: "bot", 
+        text: "⚠️ Sorry, I'm having trouble connecting. Please try again later." 
+      }]);
+    } finally {
+      setIsLoading(false);
     }
-
-    setInput("");
   };
 
   return (
@@ -62,15 +74,17 @@ function ChatbotFab() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="Type a message..."
-              className="flex-1 p-2 outline-none dark:bg-gray-900 dark:text-white"
+              onKeyDown={(e) => e.key === "Enter" && !isLoading && sendMessage()}
+              placeholder={isLoading ? "Sending..." : "Type a message..."}
+              disabled={isLoading}
+              className="flex-1 p-2 outline-none dark:bg-gray-900 dark:text-white disabled:opacity-50"
             />
             <button
               onClick={sendMessage}
-              className="bg-blue-600 text-white px-4"
+              disabled={isLoading || !input.trim()}
+              className="bg-blue-600 text-white px-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Send
+              {isLoading ? "..." : "Send"}
             </button>
           </div>
         </div>
